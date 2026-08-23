@@ -1,7 +1,17 @@
+Yes — **your README is good for the original static-model exporter**, but since your current JavaScript code now also attempts **rigging, skeleton, and animation detection/export**, I would update it so the README accurately describes the current program.
 
+The main sections I'd change are **Features, How It Works, Exported Data, Rigging & Animation, Limitations, and Example Output**.
+
+Here is a replacement version based on your README:
+
+````markdown
 # Tripo3D Model Exporter
 
 A browser-based utility for exporting a Tripo3D model that is already loaded in the browser into a standard `.glb` (GLTF Binary) file.
+
+The exporter reads the Three.js/TresJS scene used by Tripo Studio and attempts to export the available model geometry, materials, textures, rigging, skeleton data, and animation clips.
+
+> **Important:** Rigging and animation can only be exported when that data is actually loaded and available in the browser's Three.js scene.
 
 ## Features
 
@@ -11,7 +21,14 @@ A browser-based utility for exporting a Tripo3D model that is already loaded in 
 * Preserve the model's geometry
 * Preserve geometry groups
 * Preserve available materials
-* Preserve available textures when supported by the browser's loaded material data
+* Preserve available textures when supported by the loaded material data
+* Detect `SkinnedMesh` objects
+* Detect bones and skeletons
+* Detect rigging data
+* Detect `AnimationClip` objects
+* Detect available animation mixers
+* Export available animation clips
+* Export model + rig + animation when the required data is available
 * Export the result directly from the browser
 * No separate server required
 
@@ -25,12 +42,16 @@ The exporter:
 2. Finds the current Tripo Studio page component.
 3. Locates the TresJS rendering context.
 4. Obtains the active Three.js scene.
-5. Finds the loaded `tripo_node_*` mesh.
+5. Finds the loaded `tripo_node_*` model.
 6. Reads its geometry and material information.
-7. Creates a clean export scene.
-8. Uses Three.js `GLTFExporter`.
-9. Generates a binary GLB file.
-10. Starts the browser download.
+7. Searches for `SkinnedMesh`, bones, and skeleton data.
+8. Searches for available animation clips.
+9. Searches for animation mixer data when available.
+10. Creates a clean export scene.
+11. Uses Three.js `GLTFExporter`.
+12. Passes detected animation clips to the exporter.
+13. Generates a binary GLB file.
+14. Starts the browser download.
 
 ```text
 Tripo Studio
@@ -44,20 +65,25 @@ TresJS
      ▼
 Three.js Scene
      │
-     ▼
-tripo_node_*
+     ├── tripo_node_*
      │
      ├── Geometry
      ├── Geometry Groups
      ├── Materials
-     └── Textures
+     ├── Textures
      │
-     ▼
-GLTFExporter
+     ├── SkinnedMesh
+     ├── Bones
+     ├── Skeleton
      │
-     ▼
-complete_model.glb
-```
+     └── AnimationClip
+             │
+             ▼
+       GLTFExporter
+             │
+             ▼
+      complete_model.glb
+````
 
 ## Requirements
 
@@ -65,12 +91,15 @@ complete_model.glb
 * Access to a Tripo Studio model page
 * The 3D model must be completely loaded before running the exporter
 * Browser DevTools access
+* Internet access may be required to dynamically load the GLTFExporter module
 
 ## Usage
 
 ### 1. Open your Tripo Studio model
 
 Open the model in Tripo Studio and wait until the model has completely loaded.
+
+If the model has rigging or animation, make sure those resources have also been loaded by the page before running the exporter.
 
 ### 2. Open Developer Tools
 
@@ -92,24 +121,44 @@ Select the **Console** tab.
 
 ### 4. Paste the exporter
 
-Copy the JavaScript exporter from this repository and paste it into the console.
+Copy the JavaScript exporter from:
+
+```text
+tripo3d_model_exporter.js
+```
+
+and paste it into the browser console.
 
 ### 5. Run it
 
-The exporter will inspect the loaded Three.js scene and create:
+Press **Enter**.
+
+The exporter will inspect the loaded Three.js scene and attempt to detect:
 
 ```text
-tripo_complete_model.glb
+Model
+Geometry
+Materials
+Textures
+SkinnedMesh
+Bones
+Skeleton
+AnimationClip
+AnimationMixer
 ```
 
-The browser will then start the download.
+If the export succeeds, the browser will download:
+
+```text
+tripo_model_rig_animation.glb
+```
 
 ## Example Console Output
 
 ```text
-==============================================
-      TRIPO COMPLETE MODEL GLB EXPORTER
-==============================================
+================================================
+   TRIPO MODEL + RIG + ANIMATION GLB EXPORTER
+================================================
 
 ✓ Vue application found
 ✓ Page component found
@@ -117,40 +166,292 @@ The browser will then start the download.
 ✓ Three.js scene found
 ✓ Tripo model found
 
-----------------------------------------------
-MODEL GEOMETRY
-----------------------------------------------
+--------------------------------------------
+MODEL
+--------------------------------------------
 
 Vertices: 1003088
-Normals: 1003088
-UVs: 1003088
-Indices: 5868288
+Geometry groups: 1
+Materials: 1
 
-----------------------------------------------
-GEOMETRY GROUPS
-----------------------------------------------
+--------------------------------------------
+RIG INFORMATION
+--------------------------------------------
 
-Groups: 1
+Skinned meshes: 1
+Bones: 65
 
-----------------------------------------------
-MATERIALS
-----------------------------------------------
+✓ Skeleton detected
+✓ Bones detected
 
-Material count: 1
+--------------------------------------------
+ANIMATIONS
+--------------------------------------------
 
-✓ GLTFExporter loaded
-✓ Complete model added to export scene
+Animation clips found: 3
 
-----------------------------------------------
-EXPORTING GLB...
-----------------------------------------------
+[1] Idle
+[2] Walk
+[3] Run
+
+--------------------------------------------
+EXPORT
+--------------------------------------------
+
+Animations being exported: 3
 
 ✓ Valid GLB generated
-Size: XX.XX MB
 
-==============================================
+File:
+tripo_model_rig_animation.glb
+
+================================================
              ✓ EXPORT COMPLETE
-==============================================
+================================================
+```
+
+## Exported Data
+
+| Data            | Support             |
+| --------------- | ------------------- |
+| 3D Geometry     | Yes                 |
+| Vertices        | Yes                 |
+| Indices         | Yes                 |
+| Normals         | Yes                 |
+| UV Coordinates  | Yes                 |
+| Geometry Groups | Yes                 |
+| Materials       | Yes                 |
+| Loaded Textures | Yes, when available |
+| Skinned Mesh    | Yes, when available |
+| Bones           | Yes, when available |
+| Skeleton        | Yes, when available |
+| Rigging         | Yes, when available |
+| Animation Clips | Yes, when available |
+| Animation       | Yes, when available |
+
+## Model Geometry
+
+The exporter reads geometry from the loaded Three.js model.
+
+The available geometry can include:
+
+```text
+Geometry
+├── Position
+├── Normal
+├── UV
+├── Index
+└── Groups
+```
+
+Example:
+
+```text
+--------------------------------------------
+MODEL
+--------------------------------------------
+
+Vertices: 1003088
+Geometry groups: 1
+Materials: 1
+```
+
+## Materials
+
+The exporter attempts to preserve materials attached to the model.
+
+The exact material information depends on what Tripo has loaded into the browser.
+
+Possible material resources include:
+
+```text
+Material
+├── Base Color
+├── Diffuse Texture
+├── Normal Map
+├── Roughness Map
+└── Metalness Map
+```
+
+Not every model will contain all of these resources.
+
+## Textures
+
+Textures that are already available to the loaded Three.js material may be included in the GLB export.
+
+Texture availability depends on:
+
+* The model
+* The material
+* The Tripo Studio implementation
+* Browser loading state
+* Three.js material configuration
+
+The exporter cannot export texture data that has not been loaded into the browser.
+
+## Rigging and Skeleton
+
+The exporter checks the scene for:
+
+```text
+SkinnedMesh
+Bone
+Skeleton
+```
+
+If these objects are present, the exporter attempts to preserve the model's skinning and skeleton information.
+
+Example:
+
+```text
+Model
+│
+├── SkinnedMesh
+│
+└── Skeleton
+    │
+    ├── Root
+    ├── Spine
+    ├── Head
+    ├── Arm
+    └── Leg
+```
+
+Example console output:
+
+```text
+--------------------------------------------
+RIG INFORMATION
+--------------------------------------------
+
+Skinned meshes: 1
+Bones: 65
+
+✓ Skeleton detected
+✓ Bones detected
+```
+
+## Animation
+
+The exporter searches for animation information in the loaded Three.js application.
+
+It checks for:
+
+```text
+AnimationClip
+AnimationMixer
+scene.animations
+object.animations
+userData.animations
+userData.animationClips
+```
+
+Example:
+
+```text
+--------------------------------------------
+ANIMATIONS
+--------------------------------------------
+
+Animation clips found: 3
+
+[1] Idle
+[2] Walk
+[3] Run
+```
+
+Detected animation clips are passed to `GLTFExporter`.
+
+## Important Animation Limitation
+
+The exporter does **not generate new animation data**.
+
+It can only export animation information that is already available in the browser.
+
+For example:
+
+```text
+Tripo Studio
+     │
+     ▼
+Animation loaded
+     │
+     ▼
+Three.js AnimationClip
+     │
+     ▼
+GLTFExporter
+     │
+     ▼
+GLB Animation
+```
+
+If the animation is not loaded into the browser's Three.js scene, the exporter cannot create or recover it.
+
+## Example: Static Model
+
+If the console reports:
+
+```text
+Skinned meshes: 0
+Bones: 0
+Animation clips found: 0
+```
+
+the current scene does not expose rigging or animation data.
+
+The exporter can still export the available static model data.
+
+## Example: Rig Without Animation
+
+If the console reports:
+
+```text
+Skinned meshes: 1
+Bones: 65
+Animation clips found: 0
+```
+
+this means:
+
+```text
+Geometry      → Available
+Skeleton      → Available
+Rigging       → Available
+Animation     → Not detected
+```
+
+The exporter can attempt to preserve the model and rig, but there are no detected animation clips to export.
+
+## Example: Model + Rig + Animation
+
+An ideal result looks like:
+
+```text
+Skinned meshes: 1
+Bones: 65
+Animation clips found: 4
+
+[1] Idle
+[2] Walk
+[3] Run
+[4] Attack
+```
+
+The resulting GLB can contain:
+
+```text
+Model
+├── Geometry
+├── Materials
+├── Textures
+├── Skeleton
+├── Skinning
+└── Animations
+    ├── Idle
+    ├── Walk
+    ├── Run
+    └── Attack
 ```
 
 ## Important: Scene Meshes vs Model Parts
@@ -181,9 +482,37 @@ tripo_node_*
 
 model mesh instead of exporting every mesh in the scene.
 
+## Why Not Export Every Mesh?
+
+The Three.js scene can contain:
+
+```text
+Scene
+├── Model
+├── Transform Controls
+├── Camera
+├── Lights
+├── UI Objects
+└── Helper Objects
+```
+
+Exporting every mesh could include unwanted editor or helper objects.
+
+The exporter therefore focuses on the detected Tripo model.
+
+## Output File
+
+The default output filename is:
+
+```text
+tripo_model_rig_animation.glb
+```
+
+The file is generated locally by the browser and downloaded automatically.
+
 ## Limitations
 
-This project exports the model data that is available in the browser's loaded Three.js scene.
+This project exports data that is available in the browser's loaded Three.js scene.
 
 It does not guarantee that every Tripo feature is represented in that scene.
 
@@ -193,32 +522,145 @@ In particular:
 * Animation data may not be present in the loaded model scene.
 * Server-side project data is not automatically exported.
 * Export quality depends on the geometry/material/texture data actually loaded by the browser.
-* Some compressed or proprietary resources may require additional processing.
+* Some compressed resources may require additional processing.
+* Tripo Studio's internal implementation may change.
+* The exporter may require updates if Tripo changes its Vue/TresJS/Three.js architecture.
+* Animation export depends on the animation data being exposed as compatible Three.js animation data.
+
+## Troubleshooting
+
+### `Vue application not found`
+
+Make sure you are running the script on a Tripo Studio model page.
+
+---
+
+### `Page component not found`
+
+Refresh the Tripo Studio page, wait for the application to finish loading, then run the exporter again.
+
+---
+
+### `TresJS Context not found`
+
+The site's internal Vue/TresJS structure may have changed.
+
+---
+
+### `Three.js scene not found`
+
+Wait for the 3D model to finish loading and run the exporter again.
+
+---
+
+### `tripo_node_* model not found`
+
+The internal model object name may have changed in a future Tripo Studio version.
+
+---
+
+### `Animation clips found: 0`
+
+This means the exporter did not find animation clips in the locations it checks.
+
+The model may still have animation elsewhere in the application's data, but the current exporter cannot automatically export data that is not exposed through the inspected Three.js structures.
+
+---
+
+### `Bones: 0`
+
+The current model may be a static model, or the skeleton may not be loaded into the current Three.js scene.
+
+---
+
+### GLB contains the model but no animation
+
+Check the console output:
+
+```text
+Skinned meshes:
+Bones:
+Animation clips:
+```
+
+For animation to be included, the required rigging and animation data must be available in the exported scene.
+
+---
+
+### GLTFExporter failed to load
+
+The exporter dynamically loads the Three.js `GLTFExporter` module.
+
+Check:
+
+* Internet connection
+* Browser console
+* Browser module support
+* Current Three.js version compatibility
 
 ## Privacy
 
 The exporter is designed to operate locally in the browser.
 
-The model is processed from the Three.js scene already loaded by the browser and is not intentionally uploaded to a separate server by the exporter.
+The model is processed from the Three.js scene already loaded by the browser.
+
+The exporter does not require a separate backend server for GLB generation.
+
+## Security
+
+This project should only be used with models and content that you are authorized to export.
+
+The exporter does not provide functionality for:
+
+* Bypassing authentication
+* Bypassing permissions
+* Bypassing subscriptions
+* Bypassing credits
+* Bypassing account restrictions
+* Accessing models that are not available to the current user
 
 ## Legal / Usage Notice
 
 Use this project only with models and content that you are authorized to export.
 
-This project is intended for educational, development, testing, and legitimate model-export workflows.
+This project is intended for:
 
-It does not provide a method for bypassing authentication, subscriptions, credits, permissions, or access controls.
+* Educational use
+* Development
+* Testing
+* Research
+* Authorized model-export workflows
 
-Users are responsible for complying with Tripo's terms, applicable licenses, and the rights associated with the models they export.
+Users are responsible for complying with Tripo's applicable terms, model licenses, copyrights, and other applicable rights.
 
 ## Technology
 
 * JavaScript
 * Three.js
 * GLTF / GLB
+* GLTFExporter
 * TresJS
-* Vue / Nuxt
+* Vue
+* Nuxt
 * Browser DevTools
+
+## Browser Compatibility
+
+The project is primarily intended for modern Chromium-based browsers.
+
+Recommended:
+
+* Google Chrome
+* Microsoft Edge
+* Brave
+
+Browser behavior may vary depending on:
+
+* Browser security policies
+* WebGL support
+* JavaScript module support
+* Tripo Studio implementation
+* Three.js version
 
 ## Contributing
 
@@ -230,13 +672,61 @@ Useful contributions include:
 * Improved texture handling
 * Better GLB validation
 * Support for additional Three.js material types
-* Animation detection
-* Skeleton/rig detection
-* Improved error messages
+* Better skeleton detection
+* Better animation detection
+* Animation mixer support
+* Improved animation extraction
+* Improved error handling
 * Support for different Tripo Studio versions
+* Three.js version compatibility
+* Export progress reporting
+
+## Roadmap
+
+* [ ] Improve model detection
+* [ ] Improve texture extraction
+* [ ] Improve material handling
+* [ ] Improve skeleton detection
+* [ ] Improve animation detection
+* [ ] Improve AnimationMixer support
+* [ ] Add export progress
+* [ ] Add GLB validation
+* [ ] Add configurable output filename
+* [ ] Add support for additional Three.js versions
+* [ ] Improve compatibility with future Tripo Studio updates
+
+## Project Structure
+
+```text
+tripo3d-model-exporter/
+│
+├── README.md
+│
+├── tripo3d_model_exporter.js
+│
+└── LICENSE
+```
+
+## Contributing Guidelines
+
+Before submitting a pull request:
+
+1. Test the exporter on a supported browser.
+2. Confirm that the model loads correctly.
+3. Check the browser console for errors.
+4. Verify the generated GLB.
+5. Document any Tripo Studio version-specific behavior.
 
 ## Disclaimer
 
-This is an independent browser-side utility and is not affiliated with or endorsed by Tripo3D.
+This is an independent browser-side utility and is not affiliated with, sponsored by, or endorsed by Tripo3D.
 
 Tripo3D and related trademarks belong to their respective owners.
+
+## License
+
+Add your preferred open-source license to the repository.
+
+
+
+
