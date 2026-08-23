@@ -1,10 +1,10 @@
-(async function exportTripoModel() {
+(async function exportTripoModelWithAnimation() {
 
     console.clear();
 
-    console.log("==============================================");
-    console.log("      TRIPO COMPLETE MODEL GLB EXPORTER");
-    console.log("==============================================");
+    console.log("================================================");
+    console.log("   TRIPO MODEL + RIG + ANIMATION GLB EXPORTER");
+    console.log("================================================");
 
 
     // ============================================================
@@ -27,7 +27,7 @@
 
 
     // ============================================================
-    // 2. FIND ROUTER / PAGE
+    // 2. FIND PAGE
     // ============================================================
 
     const router =
@@ -125,7 +125,7 @@
 
 
     // ============================================================
-    // 4. GET THREE SCENE
+    // 4. GET THREE.JS SCENE
     // ============================================================
 
     const useTres =
@@ -151,7 +151,7 @@
 
 
     // ============================================================
-    // 5. FIND ACTUAL TRIPO MODEL
+    // 5. FIND TRIPO MODEL
     // ============================================================
 
     let tripoMesh = null;
@@ -173,50 +173,352 @@
 
     if (!tripoMesh) {
         throw new Error(
-            "tripo_node mesh not found."
+            "tripo_node_* model not found."
         );
     }
 
-
-    console.log("✓ Tripo model found");
-
     console.log(
-        "Name:",
+        "✓ Tripo model found:",
         tripoMesh.name
     );
 
 
     // ============================================================
-    // 6. INSPECT GEOMETRY
+    // 6. DETECT SKELETON / RIG
+    // ============================================================
+
+    const skinnedMeshes = [];
+    const bones = [];
+
+    scene.traverse((object) => {
+
+        if (object.isSkinnedMesh) {
+            skinnedMeshes.push(object);
+        }
+
+        if (object.isBone) {
+            bones.push(object);
+        }
+    });
+
+
+    console.log("");
+    console.log("--------------------------------------------");
+    console.log("RIG INFORMATION");
+    console.log("--------------------------------------------");
+
+    console.log(
+        "Skinned meshes:",
+        skinnedMeshes.length
+    );
+
+    console.log(
+        "Bones:",
+        bones.length
+    );
+
+
+    if (skinnedMeshes.length) {
+        console.log("✓ Skeleton detected");
+    } else {
+        console.log(
+            "⚠ No SkinnedMesh detected"
+        );
+    }
+
+
+    if (bones.length) {
+        console.log("✓ Bones detected");
+    } else {
+        console.log(
+            "⚠ No bones detected"
+        );
+    }
+
+
+    // ============================================================
+    // 7. FIND ANIMATION CLIPS
+    // ============================================================
+
+    const animationClips = [];
+    const animationSources = [];
+
+
+    function addAnimationClip(clip, source) {
+
+        if (!clip) {
+            return;
+        }
+
+        // Single AnimationClip
+        if (
+            typeof clip === "object" &&
+            clip.name &&
+            Array.isArray(clip.tracks)
+        ) {
+
+            if (!animationClips.includes(clip)) {
+
+                animationClips.push(clip);
+
+                animationSources.push({
+                    clip,
+                    source
+                });
+            }
+
+            return;
+        }
+
+        // Array of clips
+        if (Array.isArray(clip)) {
+
+            for (const item of clip) {
+
+                addAnimationClip(
+                    item,
+                    source
+                );
+            }
+        }
+    }
+
+
+    // ------------------------------------------------------------
+    // Scene-level animations
+    // ------------------------------------------------------------
+
+    addAnimationClip(
+        scene.animations,
+        "scene.animations"
+    );
+
+
+    // ------------------------------------------------------------
+    // Model-level animations
+    // ------------------------------------------------------------
+
+    addAnimationClip(
+        tripoMesh.animations,
+        "tripoMesh.animations"
+    );
+
+
+    // ------------------------------------------------------------
+    // Search every object
+    // ------------------------------------------------------------
+
+    scene.traverse((object) => {
+
+        addAnimationClip(
+            object.animations,
+            `${object.name || object.type}.animations`
+        );
+
+
+        // Some applications store animation data in userData
+        if (object.userData) {
+
+            addAnimationClip(
+                object.userData.animations,
+                `${object.name || object.type}.userData.animations`
+            );
+
+            addAnimationClip(
+                object.userData.animationClips,
+                `${object.name || object.type}.userData.animationClips`
+            );
+        }
+    });
+
+
+    // ------------------------------------------------------------
+    // Search scene userData
+    // ------------------------------------------------------------
+
+    if (scene.userData) {
+
+        addAnimationClip(
+            scene.userData.animations,
+            "scene.userData.animations"
+        );
+
+        addAnimationClip(
+            scene.userData.animationClips,
+            "scene.userData.animationClips"
+        );
+    }
+
+
+    // ============================================================
+    // 8. SEARCH ANIMATION MIXERS
+    // ============================================================
+
+    const possibleMixers = [];
+
+
+    function scanForMixers(obj, depth = 0) {
+
+        if (
+            !obj ||
+            typeof obj !== "object" ||
+            depth > 20
+        ) {
+            return;
+        }
+
+
+        if (
+            obj.constructor?.name ===
+            "AnimationMixer"
+        ) {
+
+            possibleMixers.push(obj);
+        }
+
+
+        const keys = [
+            "mixer",
+            "animationMixer",
+            "_mixer"
+        ];
+
+
+        for (const key of keys) {
+
+            try {
+
+                const value =
+                    obj[key];
+
+                if (
+                    value &&
+                    value.constructor?.name ===
+                    "AnimationMixer"
+                ) {
+
+                    possibleMixers.push(value);
+                }
+
+            } catch (_) {}
+        }
+    }
+
+
+    scanForMixers(scene);
+    scanForMixers(tripoMesh);
+
+
+    console.log(
+        "Possible animation mixers:",
+        possibleMixers.length
+    );
+
+
+    // ------------------------------------------------------------
+    // Read clips from mixer actions
+    // ------------------------------------------------------------
+
+    for (const mixer of possibleMixers) {
+
+        try {
+
+            const actions =
+                mixer._actions || [];
+
+            for (const action of actions) {
+
+                if (action?._clip) {
+
+                    addAnimationClip(
+                        action._clip,
+                        "AnimationMixer"
+                    );
+                }
+            }
+
+        } catch (error) {
+
+            console.warn(
+                "Could not inspect mixer:",
+                error
+            );
+        }
+    }
+
+
+    // Remove duplicate clips
+    const uniqueClips = [];
+
+    const clipNames =
+        new Set();
+
+
+    for (const clip of animationClips) {
+
+        const key =
+            `${clip.name}:${clip.duration}:${clip.tracks.length}`;
+
+        if (!clipNames.has(key)) {
+
+            clipNames.add(key);
+
+            uniqueClips.push(clip);
+        }
+    }
+
+
+    console.log("");
+    console.log("--------------------------------------------");
+    console.log("ANIMATIONS");
+    console.log("--------------------------------------------");
+
+    console.log(
+        "Animation clips found:",
+        uniqueClips.length
+    );
+
+
+    uniqueClips.forEach((clip, index) => {
+
+        console.log(
+            `[${index + 1}]`,
+            clip.name || "(unnamed)",
+            "| duration:",
+            clip.duration.toFixed(3),
+            "seconds",
+            "| tracks:",
+            clip.tracks.length
+        );
+    });
+
+
+    if (!uniqueClips.length) {
+
+        console.warn(
+            "⚠ No AnimationClip data was found in the loaded scene."
+        );
+
+        console.warn(
+            "The exported GLB will contain the model/rig if available, but no animation."
+        );
+    }
+
+
+    // ============================================================
+    // 9. MODEL GEOMETRY
     // ============================================================
 
     const geometry =
         tripoMesh.geometry;
 
-    if (!geometry) {
-        throw new Error(
-            "Tripo model has no geometry."
-        );
-    }
-
-
     const position =
         geometry.attributes?.position;
 
-    const normal =
-        geometry.attributes?.normal;
-
-    const uv =
-        geometry.attributes?.uv;
-
-    const index =
-        geometry.index;
-
-
     console.log("");
-    console.log("----------------------------------------------");
-    console.log("MODEL GEOMETRY");
-    console.log("----------------------------------------------");
+    console.log("--------------------------------------------");
+    console.log("MODEL");
+    console.log("--------------------------------------------");
 
     console.log(
         "Vertices:",
@@ -224,64 +526,14 @@
     );
 
     console.log(
-        "Normals:",
-        normal?.count || 0
-    );
-
-    console.log(
-        "UVs:",
-        uv?.count || 0
-    );
-
-    console.log(
-        "Indices:",
-        index?.count || 0
-    );
-
-
-    // ============================================================
-    // 7. CHECK GEOMETRY GROUPS
-    // ============================================================
-
-    console.log("");
-    console.log("----------------------------------------------");
-    console.log("GEOMETRY GROUPS");
-    console.log("----------------------------------------------");
-
-    console.log(
-        "Groups:",
+        "Geometry groups:",
         geometry.groups?.length || 0
     );
 
 
-    if (geometry.groups?.length) {
-
-        geometry.groups.forEach(
-            (group, i) => {
-
-                console.log(
-                    `[${i + 1}]`,
-                    "start:",
-                    group.start,
-                    "count:",
-                    group.count,
-                    "materialIndex:",
-                    group.materialIndex
-                );
-            }
-        );
-    }
-
-
     // ============================================================
-    // 8. CHECK MATERIALS
+    // 10. MATERIALS
     // ============================================================
-
-    console.log("");
-    console.log("----------------------------------------------");
-    console.log("MATERIALS");
-    console.log("----------------------------------------------");
-
 
     const materials =
         Array.isArray(tripoMesh.material)
@@ -290,63 +542,13 @@
 
 
     console.log(
-        "Material count:",
+        "Materials:",
         materials.length
     );
 
 
-    materials.forEach(
-        (material, i) => {
-
-            if (!material) {
-                console.log(
-                    `[${i + 1}] none`
-                );
-                return;
-            }
-
-            console.log(
-                `[${i + 1}]`,
-                material.name ||
-                "(unnamed)",
-                "|",
-                material.type
-            );
-
-
-            if (material.map) {
-
-                console.log(
-                    "   ✓ diffuse texture"
-                );
-            }
-
-            if (material.normalMap) {
-
-                console.log(
-                    "   ✓ normal map"
-                );
-            }
-
-            if (material.roughnessMap) {
-
-                console.log(
-                    "   ✓ roughness map"
-                );
-            }
-
-            if (material.metalnessMap) {
-
-                console.log(
-                    "   ✓ metalness map"
-                );
-            }
-        }
-    );
-
-
     // ============================================================
-    // 9. LOAD GLTF EXPORTER
+    // 11. LOAD GLTF EXPORTER
     // ============================================================
 
     console.log("");
@@ -370,10 +572,7 @@
 
     } catch (error) {
 
-        console.error(
-            "GLTFExporter loading failed:",
-            error
-        );
+        console.error(error);
 
         throw new Error(
             "Could not load GLTFExporter."
@@ -387,7 +586,7 @@
 
 
     // ============================================================
-    // 10. CREATE CLEAN EXPORT SCENE
+    // 12. CREATE EXPORT SCENE
     // ============================================================
 
     const ExportScene =
@@ -398,7 +597,7 @@
 
 
     // ============================================================
-    // 11. CLONE MODEL
+    // 13. CLONE MODEL
     // ============================================================
 
     tripoMesh.updateWorldMatrix(
@@ -411,10 +610,6 @@
         tripoMesh.clone(true);
 
 
-    /*
-        Preserve world position / rotation / scale.
-    */
-
     modelClone.matrix.copy(
         tripoMesh.matrixWorld
     );
@@ -423,24 +618,15 @@
         false;
 
 
-    /*
-        Explicitly preserve original geometry.
-    */
-
     modelClone.geometry =
         tripoMesh.geometry;
-
-
-    /*
-        Explicitly preserve materials.
-    */
 
     modelClone.material =
         tripoMesh.material;
 
 
     modelClone.name =
-        "Tripo_Complete_Model";
+        "Tripo_Model";
 
 
     ExportScene.add(
@@ -449,19 +635,13 @@
 
 
     console.log(
-        "✓ Complete model added to export scene"
+        "✓ Model added to export scene"
     );
 
 
     // ============================================================
-    // 12. EXPORT GLB
+    // 14. EXPORT
     // ============================================================
-
-    console.log("");
-    console.log("----------------------------------------------");
-    console.log("EXPORTING GLB...");
-    console.log("----------------------------------------------");
-
 
     const exporter =
         new GLTFExporter();
@@ -475,8 +655,28 @@
 
         trs: false,
 
-        includeCustomExtensions: true
+        includeCustomExtensions: true,
+
+        /*
+         * THIS IS THE IMPORTANT PART:
+         *
+         * Pass detected AnimationClips to GLTFExporter.
+         */
+
+        animations:
+            uniqueClips
     };
+
+
+    console.log("");
+    console.log("--------------------------------------------");
+    console.log("EXPORT");
+    console.log("--------------------------------------------");
+
+    console.log(
+        "Animations being exported:",
+        options.animations.length
+    );
 
 
     const glb =
@@ -499,7 +699,7 @@
 
                             reject(
                                 new Error(
-                                    "Exporter did not return GLB."
+                                    "Exporter did not return a GLB."
                                 )
                             );
                         }
@@ -517,7 +717,7 @@
 
 
     // ============================================================
-    // 13. CHECK GLB
+    // 15. VALIDATE GLB
     // ============================================================
 
     const view =
@@ -536,7 +736,7 @@
     ) {
 
         throw new Error(
-            "Generated file is not a valid GLB."
+            "Invalid GLB generated."
         );
     }
 
@@ -549,19 +749,8 @@
         ).toFixed(2);
 
 
-    console.log(
-        "✓ Valid GLB generated"
-    );
-
-    console.log(
-        "Size:",
-        sizeMB,
-        "MB"
-    );
-
-
     // ============================================================
-    // 14. DOWNLOAD
+    // 16. DOWNLOAD
     // ============================================================
 
     const blob =
@@ -587,7 +776,7 @@
 
 
     link.download =
-        "tripo_complete_model.glb";
+        "tripo_model_rig_animation.glb";
 
 
     document.body.appendChild(
@@ -596,7 +785,6 @@
 
 
     link.click();
-
 
     link.remove();
 
@@ -612,12 +800,18 @@
     // ============================================================
 
     console.log("");
-    console.log("==============================================");
+    console.log("================================================");
     console.log("             ✓ EXPORT COMPLETE");
-    console.log("==============================================");
+    console.log("================================================");
 
     console.log(
-        "File: tripo_complete_model.glb"
+        "File:",
+        "tripo_model_rig_animation.glb"
+    );
+
+    console.log(
+        "Size:",
+        `${sizeMB} MB`
     );
 
     console.log(
@@ -626,22 +820,21 @@
     );
 
     console.log(
-        "Groups:",
-        geometry.groups?.length || 0
+        "Skinned meshes:",
+        skinnedMeshes.length
     );
 
     console.log(
-        "Materials:",
-        materials.length
+        "Bones:",
+        bones.length
     );
 
     console.log(
-        "Size:",
-        sizeMB,
-        "MB"
+        "Animation clips:",
+        uniqueClips.length
     );
 
-    console.log("==============================================");
+    console.log("================================================");
 
 
 })();
