@@ -1,4 +1,4 @@
-# Tripo3D Model Exporter — Upgraded
+# Tripo3D.ai Model Downloader & Exporter — Upgraded
 
 A browser-side utility for exporting a Tripo Studio model that is already loaded in the user's authorized browser session to a standard `.glb` file.
 
